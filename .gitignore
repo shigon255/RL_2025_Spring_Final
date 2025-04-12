@@ -23,8 +23,6 @@ train_logs/
 eval_logs/
 temp/
 
-# third-party modules
-calvin/
 
 # data directory
 data/

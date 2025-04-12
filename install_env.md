@@ -9,7 +9,7 @@
   + Install 3d diffuser actor: 'pip install -e .'.
 + Install CALVIN
   + Please install CALVIN follow the instruction in 3d diffuser actor.
-  + Then, replace the code 'calvin/calvin/env/calvin/env/camera/{gripper|static}_camera.py' with the version in this repository. This version add the focal length and intrinsic matrix get function in camera class.
+  + Then, replace the code 'calvin/calvin_env/calvin_env/camera/{gripper|static}_camera.py' with the version in this repository. This version add the focal length and intrinsic matrix get function in camera class.
     + Please don't use the instruction in get_started_calvin.md
     + Please omit the warning when installing the CALVIN about the torch version compability. CALVIN can work on torch 2.1.0+cu118.
 + Install RLBench

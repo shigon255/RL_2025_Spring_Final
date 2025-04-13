@@ -76,6 +76,7 @@ class Mover:
     def __call__(self, action, collision_checking=False,
                  use_mono_depth=False, depth_model=None, depth_model_transform=None, depth_predict_function=None):
         if self._disabled:
+            # NEW: use depth model to predict the depth
             return self._task.step(action, use_mono_depth=use_mono_depth, 
                                    depth_model=depth_model, depth_model_transform=depth_model_transform, 
                                    depth_predict_function=depth_predict_function)
@@ -95,6 +96,7 @@ class Mover:
             action_collision[:-1] = action
             if collision_checking:
                 action_collision[-1] = 0
+            # NEW: use depth model to predict the depth
             obs, reward, terminate = self._task.step(action_collision, 
                                                      use_mono_depth=use_mono_depth, 
                                                      depth_model=depth_model, 
@@ -125,6 +127,7 @@ class Mover:
             action_collision[:-1] = action
             if collision_checking:
                 action_collision[-1] = 0
+            # NEW: use depth model to predict the depth
             obs, reward, terminate = self._task.step(action_collision, 
                                                      use_mono_depth=use_mono_depth, 
                                                      depth_model=depth_model, 
@@ -532,6 +535,7 @@ class RLBenchEnv:
             grippers = torch.Tensor([]).to(device)
 
             # descriptions, obs = task.reset()
+            # NEW: use depth model to predict the depth
             descriptions, obs = task.reset_to_demo(demo, 
                                                    use_mono_depth=use_mono_depth, 
                                                    depth_model=depth_model, 
@@ -597,6 +601,7 @@ class RLBenchEnv:
                             #    pass
                             collision_checking = self._collision_checking(task_str, step_id)
                             if id == trajectory.shape[0] - 1:
+                                # NEW: use depth model to predict the depth
                                 obs, reward, terminate, _ = move(action, collision_checking=collision_checking, 
                                                                  use_mono_depth=use_mono_depth,
                                                                  depth_model=depth_model,
@@ -613,6 +618,7 @@ class RLBenchEnv:
                         action = action[-1].detach().cpu().numpy()
 
                         collision_checking = self._collision_checking(task_str, step_id)
+                        # NEW: use depth model to predict the depth
                         obs, reward, terminate, _ = move(action, collision_checking=collision_checking,
                                                          use_mono_depth=use_mono_depth,
                                                          depth_model=depth_model,

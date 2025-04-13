@@ -56,6 +56,7 @@ def prepare_visual_states(obs: Dict[str, Dict[str, Any]],
     
     if use_mono_depth:
         
+        # NEW: use the depth model to predict depth
         fx_static, _ = static_cam.get_focal_length()
         fx_gripper, _ = gripper_cam.get_focal_length()
         

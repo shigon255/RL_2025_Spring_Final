@@ -310,6 +310,8 @@ def main(args):
     sequence_indices = [
         i for i in range(args.local_rank, NUM_SEQUENCES, int(os.environ["WORLD_SIZE"]))
     ]
+    
+    # NEW: initialize the depth model
     if args.use_mono_depth:
         depth_model, depth_model_transform = depth_init_functions[args.mono_depth_model_name](args.device)
         depth_predict_function = depth_predict_functions[args.mono_depth_model_name]

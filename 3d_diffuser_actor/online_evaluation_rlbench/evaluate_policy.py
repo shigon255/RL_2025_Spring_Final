@@ -166,6 +166,7 @@ if __name__ == "__main__":
     # Load models
     model = load_models(args)
     
+    # NEW: initialize depth model
     if args.use_mono_depth:
         depth_model, depth_transform = depth_init_functions[args.mono_depth_model_name](
             device=args.device,

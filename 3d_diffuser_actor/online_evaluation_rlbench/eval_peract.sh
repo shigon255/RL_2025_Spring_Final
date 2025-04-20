@@ -2,10 +2,13 @@ depth_model=depth_pro
 exp=3d_diffuser_actor_${depth_model}
 
 tasks=(
-    close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups
+    open_drawer
+    # open_drawer slide_block_to_color_target sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
+    # close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups
     # place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups
 )
-data_dir=./data/peract/raw/test/
+# data_dir=./data/peract/raw/test/
+data_dir=/project2/yehhh/datasets/RLBench/raw/test
 num_episodes=100
 gripper_loc_bounds_file=tasks/18_peract_tasks_location_bounds.json
 use_instruction=1
@@ -27,7 +30,7 @@ for ((i=0; i<$num_ckpts; i++)); do
     CUDA_LAUNCH_BLOCKING=1 python online_evaluation_rlbench/evaluate_policy.py \
     --tasks ${tasks[$i]} \
     --checkpoint $checkpoint \
-    --diffusion_timesteps 100 \
+    --diffusion_timesteps 2 \
     --fps_subsampling_factor $fps_subsampling_factor \
     --lang_enhanced $lang_enhanced \
     --relative_action $relative_action \
@@ -55,7 +58,7 @@ for ((i=0; i<$num_ckpts; i++)); do
     --quaternion_format $quaternion_format \
     --interpolation_length $interpolation_length \
     --dense_interpolation 1 \
-    --use_mono_depth 1 \
-    --mono_depth_model_name $depth_model 
+    # --use_mono_depth 0 \
+    # --mono_depth_model_name $depth_model 
 done
 

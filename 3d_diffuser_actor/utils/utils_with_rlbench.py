@@ -530,7 +530,7 @@ class RLBenchEnv:
             rgbs = torch.Tensor([]).to(device)
             pcds = torch.Tensor([]).to(device)
             grippers = torch.Tensor([]).to(device)
-
+            
             # descriptions, obs = task.reset()
             descriptions, obs = task.reset_to_demo(demo, 
                                                    use_mono_depth=use_mono_depth, 

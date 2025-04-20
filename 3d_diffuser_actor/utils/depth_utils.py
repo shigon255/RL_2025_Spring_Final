@@ -1,9 +1,9 @@
 import torch
 import numpy as np
-import depth_pro
-from unik3d.models import UniK3D
+# import depth_pro
+# from unik3d.models import UniK3D
 from unidepth.models import UniDepthV1, UniDepthV2
-from unik3d.utils.camera import Pinhole as unik3d_Pinhole
+# from unik3d.utils.camera import Pinhole as unik3d_Pinhole
 from unidepth.utils.camera import Pinhole as unidepth_Pinhole
 
 

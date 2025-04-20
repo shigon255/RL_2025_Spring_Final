@@ -1,5 +1,6 @@
 
 depth_model=unidepth
+depth_model=sensor
 main_dir=Planner_Calvin_${depth_model}
 dataset=/project2/yi-ray/dataset/calvin/packaged_ABC_D/training
 valset=/project2/yi-ray/dataset/calvin/packaged_ABC_D/validation
@@ -28,7 +29,7 @@ export PYTHONPATH=`pwd`:$PYTHONPATH
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     online_evaluation_calvin/evaluate_policy.py \
     --calvin_dataset_path /project2/yi-ray/dataset/calvin/task_ABC_D \
-    --calvin_model_path /project/yi-ray/programs/calvin/calvin_models \
+    --calvin_model_path /project/yehhh/UIUC/programs/calvin/calvin_models \
     --text_encoder clip \
     --text_max_length 16 \
     --tasks A B C D\
@@ -50,5 +51,8 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --base_log_dir train_logs/${main_dir}/pretrained/eval_logs/ \
     --quaternion_format $quaternion_format \
     --checkpoint train_logs/diffuser_actor_calvin.pth \
-    --use_mono_depth 1 \
+    --use_mono_depth 0 \
     --mono_depth_model_name $depth_model
+    
+    
+    # --calvin_model_path /project/yi-ray/programs/calvin/calvin_models \

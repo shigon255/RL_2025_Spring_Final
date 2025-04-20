@@ -233,6 +233,7 @@ class Scene(object):
                     rgb = np.clip((rgb * 255.).astype(np.uint8), 0, 255)
                 if get_depth or get_pcd:
                     if use_mono_depth:
+                        # NEW: use depth model to predict the depth
                         fx, _ = sensor.get_focal_length()
                         intrinsics = sensor.get_intrinsic_matrix()
                         # in PyRep, the coordinate is OpenGL-style

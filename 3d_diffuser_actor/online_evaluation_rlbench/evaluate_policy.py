@@ -75,7 +75,7 @@ class Arguments(tap.Tap):
     
     # extra
     use_mono_depth: int = 0
-    mono_depth_model_name: str = "depth_pro" # "depth_pro", "unidepth", "unik3d"
+    mono_depth_model_name: str = "unidepth" # "depth_pro", "unidepth", "unik3d"
 
 def load_models(args):
     device = torch.device(args.device)
@@ -143,6 +143,7 @@ def load_models(args):
         _key = key[7:]
         model_dict_weight[_key] = model_dict["weight"][key]
     model.load_state_dict(model_dict_weight)
+    model = model.to(device)
     model.eval()
 
     return model
@@ -175,7 +176,6 @@ if __name__ == "__main__":
     else:
         depth_model, depth_transform = None, None
         depth_predict_function = None
-
     # Load RLBench environment
     env = RLBenchEnv(
         data_path=args.data_dir,
@@ -187,7 +187,6 @@ if __name__ == "__main__":
         collision_checking=bool(args.collision_checking),
         depth_in_meters=args.use_mono_depth, # if we use mono depth, we need to set this to Tru
     )
-
     instruction = load_instructions(args.instructions)
     if instruction is None:
         raise NotImplementedError()
@@ -201,7 +200,6 @@ if __name__ == "__main__":
     )
     max_eps_dict = load_episodes()["max_episode_length"]
     task_success_rates = {}
-
     for task_str in args.tasks:
         var_success_rates = env.evaluate_task_on_multiple_variations(
             task_str,

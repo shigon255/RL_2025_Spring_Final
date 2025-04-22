@@ -26,3 +26,8 @@ temp/
 
 # data directory
 data/
+
+
+# depth finetune
+UniDepthFinetune/runs
+UniDepthFinetune/__pycache__

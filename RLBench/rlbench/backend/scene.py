@@ -1,7 +1,9 @@
 from typing import List, Callable
-
+from collections import namedtuple
 import numpy as np
 import torch
+import os 
+import re
 from pyrep import PyRep
 from pyrep.const import ObjectType
 from pyrep.errors import ConfigurationPathError
@@ -241,6 +243,7 @@ class Scene(object):
                         fx = -fx
                         intrinsics[0, 0] = -intrinsics[0, 0]
                         intrinsics[1, 1] = -intrinsics[1, 1]
+                        print(f"fx: {fx}, intrinsics: {intrinsics}")
                         depth = depth_predict_function(
                             depth_model=depth_model, 
                             depth_model_transform=depth_model_transform,
@@ -258,9 +261,9 @@ class Scene(object):
                         far = sensor.get_far_clipping_plane()
                         depth_m = near + depth * (far - near)
                     pcd = sensor.pointcloud_from_depth(depth_m)
-                    if not get_depth:
-                        depth = None
-                    
+                    # YCH: 
+                    # if not get_depth:
+                    #     depth = None
             return rgb, depth, pcd
 
         def get_mask(sensor: VisionSensor, mask_fn):
@@ -286,6 +289,64 @@ class Scene(object):
             self._cam_front, fc_ob.rgb, fc_ob.depth, fc_ob.point_cloud,
             fc_ob.rgb_noise, fc_ob.depth_noise, fc_ob.depth_in_meters)
 
+        # # YCH: collecting sim depth data
+        # def get_next_frame_idx(directory):
+        #     files = os.listdir(directory)
+            
+        #     pattern = re.compile(r'^(\d{5})\.npz$')
+            
+        #     indices = [
+        #         int(pattern.match(f).group(1))
+        #         for f in files if pattern.match(f)
+        #     ]
+            
+        #     last_idx = max(indices, default=-1)
+        #     return last_idx + 1
+        
+        # def save_multi_cam_npz(frame_idx: int,
+        #                left_shoulder: tuple,
+        #                right_shoulder: tuple,
+        #                overhead: tuple,
+        #                wrist: tuple,
+        #                front: tuple,
+        #                out_dir: str = './data'):
+        #     # unpack
+        #     l_rgb, l_depth = left_shoulder
+        #     r_rgb, r_depth = right_shoulder
+        #     o_rgb, o_depth = overhead
+        #     w_rgb, w_depth = wrist
+        #     f_rgb, f_depth = front
+
+        #     # build filename
+        #     fname = f"{out_dir}/{frame_idx:05d}.npz"
+
+        #     # save
+        #     np.savez_compressed(
+        #         fname,
+        #         left_shoulder_rgb   = l_rgb,
+        #         left_shoulder_depth = l_depth,
+        #         right_shoulder_rgb   = r_rgb,
+        #         right_shoulder_depth = r_depth,
+        #         overhead_rgb        = o_rgb,
+        #         overhead_depth      = o_depth,
+        #         wrist_rgb           = w_rgb,
+        #         wrist_depth         = w_depth,
+        #         front_rgb           = f_rgb,
+        #         front_depth         = f_depth,
+        #     )
+        
+        # out_dir = '/project2/yehhh/datasets/RLBench/sim-depth'
+        # print(f"next frame idx: {get_next_frame_idx(out_dir)}")
+        # save_multi_cam_npz(
+        #     get_next_frame_idx(out_dir),
+        #     (left_shoulder_rgb,  left_shoulder_depth),
+        #     (right_shoulder_rgb, right_shoulder_depth),
+        #     (overhead_rgb,       overhead_depth),
+        #     (wrist_rgb,          wrist_depth),
+        #     (front_rgb,          front_depth),
+        #     out_dir=out_dir
+        # )
+        
         left_shoulder_mask = get_mask(self._cam_over_shoulder_left_mask,
                                       lsc_mask_fn) if lsc_ob.mask else None
         right_shoulder_mask = get_mask(self._cam_over_shoulder_right_mask,

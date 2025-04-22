@@ -453,10 +453,8 @@ class RLBenchEnv:
         else:
             task_variations = glob.glob(os.path.join(self.data_path, task_str, "variation*"))
             task_variations = [int(n.split('/')[-1].replace('variation', '')) for n in task_variations]
-
         var_success_rates = {}
         var_num_valid_demos = {}
-
         for variation in task_variations:
             task.set_variation(variation)
             success_rate, valid, num_valid_demos = (
@@ -529,7 +527,6 @@ class RLBenchEnv:
                 num_valid_demos += 1
             except:
                 continue
-
             rgbs = torch.Tensor([]).to(device)
             pcds = torch.Tensor([]).to(device)
             grippers = torch.Tensor([]).to(device)

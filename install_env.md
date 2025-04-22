@@ -20,6 +20,7 @@
     + RLBench/rlbench/action_modes.py
     + RLBench/rlbench/backend/scene.py
     + RLBench/rlbench/task_environment.py
+    + PyRep/pyrep/objects/vision_sensor.py
 + Install xvfb
   + If running on headless cluster, xvfb is needed to run RLBench. 
   + Install xvfb first. And run something like 'xvfb-run python test.py'

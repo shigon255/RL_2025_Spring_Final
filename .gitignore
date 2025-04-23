@@ -29,5 +29,5 @@ data/
 
 
 # depth finetune
-UniDepthFinetune/runs
-UniDepthFinetune/__pycache__
+runs
+.pth

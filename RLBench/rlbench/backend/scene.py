@@ -1,9 +1,11 @@
-from typing import List, Callable
+from typing import List, Callable, Optional
 from collections import namedtuple
 import numpy as np
 import torch
 import os 
 import re
+
+from matplotlib import pyplot as plt
 from pyrep import PyRep
 from pyrep.const import ObjectType
 from pyrep.errors import ConfigurationPathError
@@ -243,11 +245,11 @@ class Scene(object):
                         fx = -fx
                         intrinsics[0, 0] = -intrinsics[0, 0]
                         intrinsics[1, 1] = -intrinsics[1, 1]
-                        print(f"fx: {fx}, intrinsics: {intrinsics}")
+                        # print(f"fx: {fx}, intrinsics: {intrinsics}")
                         depth = depth_predict_function(
                             depth_model=depth_model, 
                             depth_model_transform=depth_model_transform,
-                            rgb_img=rgb, 
+                            rgb_imgs=rgb, 
                             f_px=fx,
                             intrinsics=intrinsics)
                     else:
@@ -260,12 +262,131 @@ class Scene(object):
                         near = sensor.get_near_clipping_plane()
                         far = sensor.get_far_clipping_plane()
                         depth_m = near + depth * (far - near)
+                        # depth = depth_m    
                     pcd = sensor.pointcloud_from_depth(depth_m)
                     # YCH: 
                     # if not get_depth:
                     #     depth = None
             return rgb, depth, pcd
 
+        def get_rgbs_depths(
+                sensors: Optional[List[VisionSensor]],  
+                get_rgbs: Optional[List[bool]],        
+                get_depths: Optional[List[bool]],      
+                get_pcds: Optional[List[bool]],        
+                rgb_noises: Optional[List[NoiseModel]],     
+                depth_noises: Optional[List[NoiseModel]],   
+                depth_in_meters: Optional[List[bool]]  
+            ):
+            N = len(sensors)
+            assert N == len(get_rgbs) == len(get_depths) == len(get_pcds) \
+                    == len(rgb_noises) == len(depth_noises) == len(depth_in_meters)
+
+            # Phase 1: capture & denoise all RGBs
+            rgbs = []
+            for sensor, do_rgb, rgb_noise in zip(sensors, get_rgbs, rgb_noises):
+                rgb = None
+                if sensor is not None and do_rgb:
+                    sensor.handle_explicitly()
+                    rgb = sensor.capture_rgb()
+                    if rgb_noise is not None:
+                        rgb = rgb_noise.apply(rgb)
+                    rgb = np.clip((rgb * 255.0).astype(np.uint8), 0, 255)
+                rgbs.append(rgb)
+
+            # ── Phase 2: capture / predict depths ─────────────────────────
+            depths = []
+            if use_mono_depth:
+                intrinsics, fxs = [], []
+                for sensor, get_depth in zip(sensors, get_pcds):
+                    if sensor is not None and get_depth:
+                        fx, _ = sensor.get_focal_length()
+                        intrinsic = sensor.get_intrinsic_matrix()
+                        fx = -fx
+                        intrinsic[0,0] = -intrinsic[0,0]
+                        intrinsic[1,1] = -intrinsic[1,1]
+                        fxs.append(fx)
+                        intrinsics.append(intrinsic)
+                dpreds = depth_predict_function(
+                    depth_model=depth_model,
+                    depth_model_transform=depth_model_transform,
+                    rgb_imgs=np.array([rgb for rgb in rgbs if rgb is not None])[None],
+                    f_px=np.array(fxs)[None],
+                    intrinsics=np.array(intrinsics)[None]
+                )
+                dpreds = dpreds[0] # (B, V, H, W) -> (V, H, W)
+                for i, get_depth in enumerate(get_pcds):
+                    depth = None
+                    if get_depth:
+                        depth = dpreds[0] 
+                        dpreds = dpreds[1:] 
+                        
+                        rgb_view    = rgbs[i]  # (C, H, W) -> (H, W, C)
+                        # dpred       = depth
+
+                        # if i == 3:
+                        #     print(f"Used wrist sensor for depth prediction")
+                        #     depth = sensors[i].capture_depth(0)
+
+                        #     if depth is not None and depth_noises[i] is not None:
+                        #         depth = depth_noises[i].apply(depth)
+                        #     near = sensor.get_near_clipping_plane()
+                        #     far  = sensor.get_far_clipping_plane()
+                        #     depth = near + depth * (far - near)
+
+                        plt.figure(figsize=(10, 5))
+
+                        # RGB View
+                        plt.subplot(1, 2, 1)
+                        plt.imshow(rgb_view)
+                        plt.title("RGB View")
+                        plt.axis("off")
+
+                        plt.subplot(1, 2, 2)
+                        plt.imshow(depth, cmap='viridis')
+                        plt.title("Predicted Depth")
+                        plt.colorbar()
+                        plt.axis("off")
+                        plt.tight_layout
+                        plt.savefig(f'/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/eval_logs/vis_{i}.png')
+                        plt.close()
+                    depths.append(depth)
+            else:
+                for i, (sensor, rgb, do_depth, depth_noise, depth_in_meter) in enumerate(
+                    zip(sensors, rgbs, get_pcds, depth_noises, depth_in_meters)
+                ):
+                    depth = None
+                    if sensor is not None and do_depth:
+                        # ensure sensor state updated
+                        if not get_rgbs[i]:
+                            sensor.handle_explicitly()
+
+                        depth = sensor.capture_depth(depth_in_meter)
+
+                        if depth is not None and depth_noise is not None:
+                            depth = depth_noise.apply(depth)
+
+                    depths.append(depth)
+
+            # ── Phase 3: compute point‑clouds ─────────────────────────────
+            pcds = []
+            for i, (sensor, depth, do_pcd, depth_in_meter) in enumerate(
+                zip(sensors, depths, get_pcds, depth_in_meters)
+            ):
+                pcd = None
+                if sensor is not None and do_pcd and depth is not None:
+                    # convert to meters if needed
+                    depth_m = depth
+                    if not depth_in_meter and not use_mono_depth:
+                        near = sensor.get_near_clipping_plane()
+                        far  = sensor.get_far_clipping_plane()
+                        depth_m = near + depth * (far - near)
+                    pcd = sensor.pointcloud_from_depth(depth_m)
+                pcds.append(pcd)
+            
+            depths = [None] * N
+            return rgbs, depths, pcds
+            
         def get_mask(sensor: VisionSensor, mask_fn):
             mask = None
             if sensor is not None:
@@ -273,21 +394,36 @@ class Scene(object):
                 mask = mask_fn(sensor.capture_rgb())
             return mask
 
-        left_shoulder_rgb, left_shoulder_depth, left_shoulder_pcd = get_rgb_depth(
-            self._cam_over_shoulder_left, lsc_ob.rgb, lsc_ob.depth, lsc_ob.point_cloud,
-            lsc_ob.rgb_noise, lsc_ob.depth_noise, lsc_ob.depth_in_meters)
-        right_shoulder_rgb, right_shoulder_depth, right_shoulder_pcd = get_rgb_depth(
-            self._cam_over_shoulder_right, rsc_ob.rgb, rsc_ob.depth, rsc_ob.point_cloud,
-            rsc_ob.rgb_noise, rsc_ob.depth_noise, rsc_ob.depth_in_meters)
-        overhead_rgb, overhead_depth, overhead_pcd = get_rgb_depth(
-            self._cam_overhead, oc_ob.rgb, oc_ob.depth, oc_ob.point_cloud,
-            oc_ob.rgb_noise, oc_ob.depth_noise, oc_ob.depth_in_meters)
-        wrist_rgb, wrist_depth, wrist_pcd = get_rgb_depth(
-            self._cam_wrist, wc_ob.rgb, wc_ob.depth, wc_ob.point_cloud,
-            wc_ob.rgb_noise, wc_ob.depth_noise, wc_ob.depth_in_meters)
-        front_rgb, front_depth, front_pcd = get_rgb_depth(
-            self._cam_front, fc_ob.rgb, fc_ob.depth, fc_ob.point_cloud,
-            fc_ob.rgb_noise, fc_ob.depth_noise, fc_ob.depth_in_meters)
+        # left_shoulder_rgb, left_shoulder_depth, left_shoulder_pcd = get_rgb_depth(
+        #     self._cam_over_shoulder_left, lsc_ob.rgb, lsc_ob.depth, lsc_ob.point_cloud,
+        #     lsc_ob.rgb_noise, lsc_ob.depth_noise, lsc_ob.depth_in_meters)
+        # right_shoulder_rgb, right_shoulder_depth, right_shoulder_pcd = get_rgb_depth(
+        #     self._cam_over_shoulder_right, rsc_ob.rgb, rsc_ob.depth, rsc_ob.point_cloud,
+        #     rsc_ob.rgb_noise, rsc_ob.depth_noise, rsc_ob.depth_in_meters)
+        # overhead_rgb, overhead_depth, overhead_pcd = get_rgb_depth(
+        #     self._cam_overhead, oc_ob.rgb, oc_ob.depth, oc_ob.point_cloud,
+        #     oc_ob.rgb_noise, oc_ob.depth_noise, oc_ob.depth_in_meters)
+        # wrist_rgb, wrist_depth, wrist_pcd = get_rgb_depth(
+        #     self._cam_wrist, wc_ob.rgb, wc_ob.depth, wc_ob.point_cloud,
+        #     wc_ob.rgb_noise, wc_ob.depth_noise, wc_ob.depth_in_meters)
+        # front_rgb, front_depth, front_pcd = get_rgb_depth(
+        #     self._cam_front, fc_ob.rgb, fc_ob.depth, fc_ob.point_cloud,
+        #     fc_ob.rgb_noise, fc_ob.depth_noise, fc_ob.depth_in_meters)
+        
+        rgbs, depths, pcds = get_rgbs_depths(
+            sensors=[self._cam_over_shoulder_left, self._cam_over_shoulder_right, self._cam_overhead, self._cam_wrist, self._cam_front],
+            get_rgbs=[lsc_ob.rgb, rsc_ob.rgb, oc_ob.rgb, wc_ob.rgb, fc_ob.rgb],
+            get_depths=[lsc_ob.depth, rsc_ob.depth, oc_ob.depth, wc_ob.depth, fc_ob.depth],
+            get_pcds=[lsc_ob.point_cloud, rsc_ob.point_cloud, oc_ob.point_cloud, wc_ob.point_cloud, fc_ob.point_cloud],
+            rgb_noises=[lsc_ob.rgb_noise, rsc_ob.rgb_noise, oc_ob.rgb_noise, wc_ob.rgb_noise, fc_ob.rgb_noise],
+            depth_noises=[lsc_ob.depth_noise, rsc_ob.depth_noise, oc_ob.depth_noise, wc_ob.depth_noise, fc_ob.depth_noise],
+            depth_in_meters=[lsc_ob.depth_in_meters, rsc_ob.depth_in_meters, oc_ob.depth_in_meters, wc_ob.depth_in_meters, fc_ob.depth_in_meters]
+        )
+        left_shoulder_rgb, left_shoulder_depth, left_shoulder_pcd = rgbs[0], depths[0], pcds[0]
+        right_shoulder_rgb, right_shoulder_depth, right_shoulder_pcd = rgbs[1], depths[1], pcds[1]
+        overhead_rgb, overhead_depth, overhead_pcd = rgbs[2], depths[2], pcds[2]
+        wrist_rgb, wrist_depth, wrist_pcd = rgbs[3], depths[3], pcds[3]
+        front_rgb, front_depth, front_pcd = rgbs[4], depths[4], pcds[4]
 
         # # YCH: collecting sim depth data
         # def get_next_frame_idx(directory):
@@ -335,7 +471,7 @@ class Scene(object):
         #         front_depth         = f_depth,
         #     )
         
-        # out_dir = '/project2/yehhh/datasets/RLBench/sim-depth'
+        # out_dir = '/project2/yehhh/datasets/RLBench/sim-depth_m'
         # print(f"next frame idx: {get_next_frame_idx(out_dir)}")
         # save_multi_cam_npz(
         #     get_next_frame_idx(out_dir),
@@ -346,7 +482,9 @@ class Scene(object):
         #     (front_rgb,          front_depth),
         #     out_dir=out_dir
         # )
-        
+        # left_shoulder_depth, right_shoulder_depth, overhead_depth, wrist_depth, front_depth = [None, None, None, None, None]
+
+
         left_shoulder_mask = get_mask(self._cam_over_shoulder_left_mask,
                                       lsc_mask_fn) if lsc_ob.mask else None
         right_shoulder_mask = get_mask(self._cam_over_shoulder_right_mask,

@@ -75,7 +75,7 @@ class Arguments(tap.Tap):
     
     # extra
     use_mono_depth: int = 0
-    mono_depth_model_name: str = "unidepth" # "depth_pro", "unidepth", "unik3d"
+    mono_depth_model_name: str = "unidepth" # "depth_pro", "unidepth", "unik3d", "unidepthfinetune"
 
 def load_models(args):
     device = torch.device(args.device)

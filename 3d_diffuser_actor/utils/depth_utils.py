@@ -1,10 +1,17 @@
+import einops
 import torch
 import numpy as np
+import sys
+import os
 # import depth_pro
 # from unik3d.models import UniK3D
 from unidepth.models import UniDepthV1, UniDepthV2
 # from unik3d.utils.camera import Pinhole as unik3d_Pinhole
 from unidepth.utils.camera import Pinhole as unidepth_Pinhole
+
+# YCH: import finetune depth model
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from UniDepthFinetune.model import UniDepthV2Finetune
 
 
 def init_depth_pro(device='cuda'):
@@ -20,6 +27,15 @@ def init_unidepth(device='cuda', name='unidepth-v2-vitl14'):
 
 def init_unik3d(device='cuda', name='unik3d-vitl'):
     model = UniK3D.from_pretrained(f"lpiccinelli/{name}")
+    model = model.to(device)
+    model.eval()
+    return model, None
+
+# YCH: init unidepth finetune model
+def init_unidepthfinetune(device='cuda', name='unidepth-v2-vitl14', \
+                            finetune_weights='/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/UniDepthFinetune/runs/correction_model.pth'):
+    finetune_weights = "/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/UniDepthFinetune/runs/finetune_lr-3schedule_loss110_weightedl1_4camera/correction_model_6.pth"
+    model = UniDepthV2Finetune(device, correction_head_weights=finetune_weights)
     model = model.to(device)
     model.eval()
     return model, None
@@ -70,6 +86,31 @@ def predict_depth_unidepth(depth_model,
     
     return depth
 
+# YCH: predict depth for unidepth finetune model
+def predict_depth_unidepthfinetune(depth_model,
+                           rgb_imgs = None,
+                           intrinsics = None,
+                           f_px = None, # dummy
+                           depth_model_transform=None, # dummy
+) -> np.ndarray:
+    """
+    Args:
+        rgb_imgs: (B, V, H, W, 3), V is the number of views, in range [0, 255]
+        intrinsics: (B, V, 3, 3)
+    Returns:
+        depth: (B, V, H, W)
+    """
+
+    rgb_imgs = (torch.from_numpy(rgb_imgs.astype(np.float32)) / 255.0).to(depth_model.device) 
+    rgb_imgs = einops.rearrange(rgb_imgs, 'B V H W C -> B V C H W')
+    intrinsics = torch.from_numpy(intrinsics.astype(np.float32)).to(depth_model.device)
+    with torch.no_grad():
+        dpreds = depth_model(rgb_imgs, intrinsics)       # (B,4,1,H,W)
+    
+    dpreds = dpreds.squeeze(2).cpu().numpy()  # (B, V, H, W)
+    
+    return dpreds
+
 def predict_depth_unik3d(depth_model,
                         rgb_img,
                         intrinsics = None,
@@ -98,10 +139,12 @@ depth_init_functions = {
     'depth_pro': init_depth_pro,
     'unidepth': init_unidepth,
     'unik3d': init_unik3d,
+    'unidepthfinetune': init_unidepthfinetune,
 }
 
 depth_predict_functions = {
     'depth_pro': predict_depth_pro,
     'unidepth': predict_depth_unidepth,
     'unik3d': predict_depth_unik3d,
+    'unidepthfinetune': predict_depth_unidepthfinetune,
 }

@@ -1,8 +1,8 @@
-depth_model=unidepth
-exp=3d_diffuser_actor_${depth_model}
+depth_model=unidepthfinetune
+exp=3d_diffuser_actor_${depth_model}_4view
 
 tasks=(
-    meat_off_grill
+    slide_block_to_color_target
     # open_drawer slide_block_to_color_target sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
     # close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups
     # place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups
@@ -27,12 +27,13 @@ quaternion_format=wxyz  # IMPORTANT: change this to be the same as the training 
 # cp ../RLBench/rlbench/backend/scene.py /project/yehhh/UIUC/programs/RLBench/rlbench/backend/
 # cp ../RLBench/rlbench/action_modes/action_mode.py /project/yehhh/UIUC/programs/RLBench/rlbench/action_modes/
 # cp ../RLBench/rlbench/task_environment.py  /project/yehhh/UIUC/programs/RLBench/rlbench/
-# export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=3
 
 
 num_ckpts=${#tasks[@]}
 for ((i=0; i<$num_ckpts; i++)); do
-    CUDA_LAUNCH_BLOCKING=1 python online_evaluation_rlbench/evaluate_policy.py \
+    # CUDA_LAUNCH_BLOCKING=1 python online_evaluation_rlbench/evaluate_policy.py \
+    python online_evaluation_rlbench/evaluate_policy.py \
     --tasks ${tasks[$i]} \
     --checkpoint $checkpoint \
     --diffusion_timesteps 100 \

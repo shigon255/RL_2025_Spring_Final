@@ -158,6 +158,15 @@ class TrainTester(BaseTrainTester):
             lang_enhanced=bool(self.args.lang_enhanced)
         )
         print("Model parameters:", count_parameters(_model))
+        
+        # NEW Jason
+        # Load model weights
+        # model_dict = torch.load(self.args.checkpoint, map_location="cpu")
+        # model_dict_weight = {}
+        # for key in model_dict["weight"]:
+        #     _key = key[7:]
+        #     model_dict_weight[_key] = model_dict["weight"][key]
+        # _model.load_state_dict(model_dict_weight)
 
         return _model
 
@@ -441,6 +450,7 @@ if __name__ == '__main__':
     random.seed(args.seed)
 
     # DDP initialization
+    # print(args.local_rank)
     torch.cuda.set_device(args.local_rank)
     torch.distributed.init_process_group(backend='nccl', init_method='env://')
     torch.backends.cudnn.enabled = True

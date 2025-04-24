@@ -10,12 +10,14 @@ num_history=3
 diffusion_timesteps=100
 B=8
 C=120
-ngpus=6
+ngpus=2
 quaternion_format=xyzw
+checkpoint=train_logs/diffuser_actor_peract.pth
 
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_trajectory.py \
-    --tasks place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap \
+    --tasks meat_off_grill open_drawer put_item_in_drawer slide_block_to_color_target sweep_to_dustpan_of_size \
+    --checkpoint $checkpoint \
     --dataset $dataset \
     --valset $valset \
     --instructions instructions/peract/instructions.pkl \

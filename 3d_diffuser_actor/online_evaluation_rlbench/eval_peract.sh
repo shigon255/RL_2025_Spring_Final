@@ -1,8 +1,9 @@
 depth_model=unidepthfinetune
-exp=3d_diffuser_actor_${depth_model}_4view
+exp=3d_diffuser_actor_${depth_model}
 
 tasks=(
-    slide_block_to_color_target
+    open_drawer sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
+    # slide_block_to_color_target
     # open_drawer slide_block_to_color_target sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
     # close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups
     # place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups

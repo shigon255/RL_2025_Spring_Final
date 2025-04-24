@@ -264,11 +264,13 @@ class Scene(object):
                         depth_m = near + depth * (far - near)
                         # depth = depth_m    
                     pcd = sensor.pointcloud_from_depth(depth_m)
-                    # YCH: 
+                    # ## YCH: 
                     # if not get_depth:
                     #     depth = None
             return rgb, depth, pcd
 
+        ## YCH: function getting rgbs depths pcds at once with finetuned depth model, 
+        ##      using GT depth for wrist camera
         def get_rgbs_depths(
                 sensors: Optional[List[VisionSensor]],  
                 get_rgbs: Optional[List[bool]],        
@@ -324,32 +326,32 @@ class Scene(object):
                         rgb_view    = rgbs[i]  # (C, H, W) -> (H, W, C)
                         # dpred       = depth
 
-                        # if i == 3:
-                        #     print(f"Used wrist sensor for depth prediction")
-                        #     depth = sensors[i].capture_depth(0)
+                        if i == 3:
+                            print(f"Used wrist sensor for depth prediction")
+                            depth = sensors[i].capture_depth(0)
 
-                        #     if depth is not None and depth_noises[i] is not None:
-                        #         depth = depth_noises[i].apply(depth)
-                        #     near = sensor.get_near_clipping_plane()
-                        #     far  = sensor.get_far_clipping_plane()
-                        #     depth = near + depth * (far - near)
+                            if depth is not None and depth_noises[i] is not None:
+                                depth = depth_noises[i].apply(depth)
+                            near = sensor.get_near_clipping_plane()
+                            far  = sensor.get_far_clipping_plane()
+                            depth = near + depth * (far - near)
 
-                        plt.figure(figsize=(10, 5))
+                        # plt.figure(figsize=(10, 5))
 
-                        # RGB View
-                        plt.subplot(1, 2, 1)
-                        plt.imshow(rgb_view)
-                        plt.title("RGB View")
-                        plt.axis("off")
+                        # # RGB View
+                        # plt.subplot(1, 2, 1)
+                        # plt.imshow(rgb_view)
+                        # plt.title("RGB View")
+                        # plt.axis("off")
 
-                        plt.subplot(1, 2, 2)
-                        plt.imshow(depth, cmap='viridis')
-                        plt.title("Predicted Depth")
-                        plt.colorbar()
-                        plt.axis("off")
-                        plt.tight_layout
-                        plt.savefig(f'/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/eval_logs/vis_{i}.png')
-                        plt.close()
+                        # plt.subplot(1, 2, 2)
+                        # plt.imshow(depth, cmap='viridis')
+                        # plt.title("Predicted Depth")
+                        # plt.colorbar()
+                        # plt.axis("off")
+                        # plt.tight_layout
+                        # plt.savefig(f'/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/eval_logs/vis_{i}.png')
+                        # plt.close()
                     depths.append(depth)
             else:
                 for i, (sensor, rgb, do_depth, depth_noise, depth_in_meter) in enumerate(
@@ -410,6 +412,8 @@ class Scene(object):
         #     self._cam_front, fc_ob.rgb, fc_ob.depth, fc_ob.point_cloud,
         #     fc_ob.rgb_noise, fc_ob.depth_noise, fc_ob.depth_in_meters)
         
+
+        ## YCH: get rgbs depths pcds at once with finetuned depth model
         rgbs, depths, pcds = get_rgbs_depths(
             sensors=[self._cam_over_shoulder_left, self._cam_over_shoulder_right, self._cam_overhead, self._cam_wrist, self._cam_front],
             get_rgbs=[lsc_ob.rgb, rsc_ob.rgb, oc_ob.rgb, wc_ob.rgb, fc_ob.rgb],
@@ -425,7 +429,7 @@ class Scene(object):
         wrist_rgb, wrist_depth, wrist_pcd = rgbs[3], depths[3], pcds[3]
         front_rgb, front_depth, front_pcd = rgbs[4], depths[4], pcds[4]
 
-        # # YCH: collecting sim depth data
+        # ## YCH: collecting sim depth data
         # def get_next_frame_idx(directory):
         #     files = os.listdir(directory)
             

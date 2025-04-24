@@ -9,7 +9,7 @@ from unidepth.models import UniDepthV1, UniDepthV2
 # from unik3d.utils.camera import Pinhole as unik3d_Pinhole
 from unidepth.utils.camera import Pinhole as unidepth_Pinhole
 
-# YCH: import finetune depth model
+## YCH: import finetune depth model
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from UniDepthFinetune.model import UniDepthV2Finetune
 
@@ -31,10 +31,10 @@ def init_unik3d(device='cuda', name='unik3d-vitl'):
     model.eval()
     return model, None
 
-# YCH: init unidepth finetune model
+## YCH: init unidepth finetune model
 def init_unidepthfinetune(device='cuda', name='unidepth-v2-vitl14', \
                             finetune_weights='/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/UniDepthFinetune/runs/correction_model.pth'):
-    finetune_weights = "/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/UniDepthFinetune/runs/finetune_lr-3schedule_loss110_weightedl1_4camera/correction_model_6.pth"
+    # finetune_weights = "/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/UniDepthFinetune/runs/finetune_lr-3schedule_loss110_weightedl1_4camera/correction_model_6.pth"
     model = UniDepthV2Finetune(device, correction_head_weights=finetune_weights)
     model = model.to(device)
     model.eval()
@@ -86,7 +86,7 @@ def predict_depth_unidepth(depth_model,
     
     return depth
 
-# YCH: predict depth for unidepth finetune model
+## YCH: predict depth for unidepth finetune model
 def predict_depth_unidepthfinetune(depth_model,
                            rgb_imgs = None,
                            intrinsics = None,

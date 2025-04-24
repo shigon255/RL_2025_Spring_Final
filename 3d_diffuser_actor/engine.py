@@ -128,6 +128,7 @@ class BaseTrainTester:
         if self.args.checkpoint:
             assert os.path.isfile(self.args.checkpoint)
             start_iter, best_loss = self.load_checkpoint(model, optimizer)
+            start_iter, best_loss = 0, None
 
         # Eval only
         if bool(self.args.eval_only):

@@ -33,7 +33,7 @@ def init_unik3d(device='cuda', name='unik3d-vitl'):
 
 ## YCH: init unidepth finetune model
 def init_unidepthfinetune(device='cuda', name='unidepth-v2-vitl14', \
-                            finetune_weights='/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/UniDepthFinetune/runs/correction_model.pth'):
+                            finetune_weights='./UniDepthFinetune/runs/correction_model.pth'):
     # finetune_weights = "/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/UniDepthFinetune/runs/finetune_lr-3schedule_loss110_weightedl1_4camera/correction_model_6.pth"
     model = UniDepthV2Finetune(device, correction_head_weights=finetune_weights)
     model = model.to(device)

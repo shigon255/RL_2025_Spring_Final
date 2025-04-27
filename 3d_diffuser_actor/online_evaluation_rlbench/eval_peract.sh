@@ -2,7 +2,7 @@ depth_model=unidepthfinetune
 exp=3d_diffuser_actor_${depth_model}
 
 tasks=(
-    open_drawer sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
+    slide_block_to_color_target open_drawer sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
     # slide_block_to_color_target
     # open_drawer slide_block_to_color_target sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
     # close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups
@@ -22,14 +22,14 @@ cameras="left_shoulder,right_shoulder,wrist,front"
 fps_subsampling_factor=5
 lang_enhanced=0
 relative_action=0
-seed=0
+seed=1
 checkpoint=train_logs/diffuser_actor_peract.pth
 quaternion_format=wxyz  # IMPORTANT: change this to be the same as the training script IF you're not using our checkpoint
 # cp ../RLBench/rlbench/backend/scene.py /project/yehhh/UIUC/programs/RLBench/rlbench/backend/
 # cp ../RLBench/rlbench/action_modes/action_mode.py /project/yehhh/UIUC/programs/RLBench/rlbench/action_modes/
 # cp ../RLBench/rlbench/task_environment.py  /project/yehhh/UIUC/programs/RLBench/rlbench/
-export CUDA_VISIBLE_DEVICES=3
-
+export CUDA_VISIBLE_DEVICES=0
+# export PYTHONPATH=$PYTHONPATH:/data1/yehhh_/RL_2025_Spring_Final/UniDepth
 
 num_ckpts=${#tasks[@]}
 for ((i=0; i<$num_ckpts; i++)); do

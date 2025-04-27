@@ -1,9 +1,12 @@
 from multiprocessing import Process, Manager
 from typing import Type, List, Callable
 import glob
+import logging
 import os
 import pickle
 from subprocess import call
+
+from utils.depth_utils import depth_init_functions, depth_predict_functions
 
 from pyrep.const import RenderMode
 
@@ -76,6 +79,10 @@ flags.DEFINE_integer('variations', -1,
                      'Number of variations to collect per task. -1 for all.')
 flags.DEFINE_bool('all_variations', True,
                   'Include all variations when sampling epsiodes')
+flags.DEFINE_integer('use_mono_depth', 0, '')
+flags.DEFINE_string('mono_depth_model_name',
+                    'unidepthfinetune',
+                    '')
 
 
 class CustomizedTaskEnvironment(TaskEnvironment):
@@ -89,7 +96,11 @@ class CustomizedTaskEnvironment(TaskEnvironment):
                   random_selection: bool = True,
                   from_episode_number: int = 0,
                   random_seed_state = None,
-                  ) -> List[Demo]:
+                use_mono_depth=False,
+                depth_model=None,
+                depth_model_transform=None,
+                depth_predict_function=None
+                ) -> List[Demo]:
         """Negative means all demos"""
 
         if not live_demos and (self._dataset_root is None
@@ -109,7 +120,11 @@ class CustomizedTaskEnvironment(TaskEnvironment):
             ctr_loop = self._robot.arm.joints[0].is_control_loop_enabled()
             self._robot.arm.set_control_loop_enabled(True)
             demos = self._get_live_demos(
-                amount, callable_each_step, max_attempts, random_seed_state)
+                amount, callable_each_step, max_attempts, random_seed_state, 
+                use_mono_depth=use_mono_depth, 
+                depth_model=depth_model, 
+                depth_model_transform=depth_model_transform, 
+                depth_predict_function=depth_predict_function)
             self._robot.arm.set_control_loop_enabled(ctr_loop)
         return demos
 
@@ -117,7 +132,12 @@ class CustomizedTaskEnvironment(TaskEnvironment):
                         callable_each_step: Callable[
                             [Observation], None] = None,
                         max_attempts: int = _MAX_DEMO_ATTEMPTS,
-                        random_seed_state = None) -> List[Demo]:
+                        random_seed_state = None,
+                        use_mono_depth=False,
+                        depth_model=None,
+                        depth_model_transform=None,
+                        depth_predict_function=None
+                        ) -> List[Demo]:
         demos = []
         for i in range(amount):
             attempts = max_attempts
@@ -129,8 +149,13 @@ class CustomizedTaskEnvironment(TaskEnvironment):
                     np.random.set_state(random_seed)
                 self.reset()
                 try:
+                    print(f"use mono depth: {use_mono_depth}")
                     demo = self._scene.get_demo(
-                        callable_each_step=callable_each_step)
+                        callable_each_step=callable_each_step,
+                        use_mono_depth=use_mono_depth, 
+                        depth_model=depth_model, 
+                        depth_model_transform=depth_model_transform, 
+                        depth_predict_function=depth_predict_function)
                     demo.random_seed = random_seed
                     demos.append(demo)
                     break
@@ -210,7 +235,6 @@ def save_demo(demo, example_path, variation):
     check_and_make(front_rgb_path)
     check_and_make(front_depth_path)
     check_and_make(front_mask_path)
-
     for i, obs in enumerate(demo):
         left_shoulder_rgb = Image.fromarray(obs.left_shoulder_rgb)
         left_shoulder_depth = utils.float_array_to_rgb_image(
@@ -235,7 +259,6 @@ def save_demo(demo, example_path, variation):
         front_depth = utils.float_array_to_rgb_image(
             obs.front_depth, scale_factor=DEPTH_SCALE)
         front_mask = Image.fromarray((obs.front_mask * 255).astype(np.uint8))
-
         left_shoulder_rgb.save(
             os.path.join(left_shoulder_rgb_path, IMAGE_FORMAT % i))
         left_shoulder_depth.save(
@@ -351,7 +374,11 @@ def verify_demo_and_rgbs(demo, example_path):
     assert len(demo) == num_wrist_mask
 
 
-def run_all_variations(i, lock, task_index, variation_count, results, file_lock, tasks):
+def run_all_variations(i, lock, task_index, variation_count, results, file_lock, tasks, 
+                        use_mono_depth=False,
+                        depth_model=None,
+                        depth_model_transform=None,
+                        depth_predict_function=None):
     """Each thread will choose one task and variation, and then gather
     all the episodes_per_task for that variation."""
 
@@ -451,7 +478,6 @@ def run_all_variations(i, lock, task_index, variation_count, results, file_lock,
                     task_env = rlbench_env.get_task(t)
                     task_env.set_variation(variation)
                     descriptions, obs = task_env.reset()
-
                     print('Process', i, '// Task:', task_env.get_name(),
                           '// Variation:', variation, '// Demo:', ex_idx)
 
@@ -459,8 +485,11 @@ def run_all_variations(i, lock, task_index, variation_count, results, file_lock,
                     demo, = task_env.get_demos(
                         amount=1,
                         live_demos=True,
-                        random_seed_state=random_seed_state)
-
+                        random_seed_state=random_seed_state, 
+                        use_mono_depth=use_mono_depth, 
+                        depth_model=depth_model, 
+                        depth_model_transform=depth_model_transform, 
+                        depth_predict_function=depth_predict_function)
                     with file_lock:
                         save_demo(demo, episode_path, variation)
 
@@ -471,6 +500,7 @@ def run_all_variations(i, lock, task_index, variation_count, results, file_lock,
                     # verify demo
                     verify_demo_and_rgbs(demo, episode_path)
                 except Exception as e:
+                    print(e)
                     attempts -= 1
 
                     # clean up previously saved RGBs
@@ -500,7 +530,15 @@ def run_all_variations(i, lock, task_index, variation_count, results, file_lock,
 
 
 def main(argv):
-
+    if FLAGS.use_mono_depth:
+        depth_model, depth_transform = depth_init_functions[FLAGS.mono_depth_model_name](
+            device="cuda",
+        )
+        depth_predict_function = depth_predict_functions[FLAGS.mono_depth_model_name]
+    else:
+        depth_model, depth_transform = None, None
+        depth_predict_function = None
+    
     task_files = [t.replace('.py', '') for t in os.listdir(task.TASKS_PATH)
                   if t != '__init__.py' and t.endswith('.py')]
 
@@ -524,7 +562,11 @@ def main(argv):
     check_and_make(FLAGS.save_path)
 
     # multiprocessing for all_variations not support (for now)
-    run_all_variations(0, lock, task_index, variation_count, result_dict, file_lock, tasks)
+    run_all_variations(0, lock, task_index, variation_count, result_dict, file_lock, tasks, 
+                       use_mono_depth=FLAGS.use_mono_depth, 
+                        depth_model=depth_model, 
+                        depth_model_transform=depth_transform, 
+                        depth_predict_function=depth_predict_function)
 
     print('Data collection done!')
     for i in range(FLAGS.processes):

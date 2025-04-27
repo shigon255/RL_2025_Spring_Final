@@ -51,4 +51,5 @@ cd ..
 
 
 module load cuda/11.8
+conda activate 598
 xvfb-run --auto-servernum bash online_evaluation_rlbench/test.sh

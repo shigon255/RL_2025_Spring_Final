@@ -17,10 +17,10 @@ cameras="left_shoulder,right_shoulder,wrist,front"
 fps_subsampling_factor=5
 lang_enhanced=0
 relative_action=0
-seed=3
+seed=4
 checkpoint=train_logs/diffuser_actor_peract.pth
 quaternion_format=wxyz  # IMPORTANT: change this to be the same as the training script IF you're not using our checkpoint
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=0
 
 num_ckpts=${#tasks[@]}
 for ((i=0; i<$num_ckpts; i++)); do

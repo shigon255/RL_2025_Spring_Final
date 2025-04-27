@@ -283,7 +283,7 @@ class Scene(object):
             N = len(sensors)
             assert N == len(get_rgbs) == len(get_depths) == len(get_pcds) \
                     == len(rgb_noises) == len(depth_noises) == len(depth_in_meters)
-
+            used_camera_idxs = [0, 1, 4]
             # Phase 1: capture & denoise all RGBs
             rgbs = []
             for sensor, do_rgb, rgb_noise in zip(sensors, get_rgbs, rgb_noises):
@@ -298,78 +298,73 @@ class Scene(object):
 
             # ── Phase 2: capture / predict depths ─────────────────────────
             depths = []
+            
+            for i, (sensor, rgb, do_depth, depth_noise, depth_in_meter) in enumerate(
+                zip(sensors, rgbs, get_pcds, depth_noises, depth_in_meters)
+            ):
+                depth = None
+                if sensor is not None and do_depth:
+                    # ensure sensor state updated
+                    if not get_rgbs[i]:
+                        sensor.handle_explicitly()
+
+                    depth = sensor.capture_depth(depth_in_meter)
+
+                    if depth is not None and depth_noise is not None:
+                        depth = depth_noise.apply(depth)
+
+                depths.append(depth)
+
             if use_mono_depth:
-                intrinsics, fxs = [], []
-                for sensor, get_depth in zip(sensors, get_pcds):
-                    if sensor is not None and get_depth:
-                        fx, _ = sensor.get_focal_length()
-                        intrinsic = sensor.get_intrinsic_matrix()
-                        fx = -fx
-                        intrinsic[0,0] = -intrinsic[0,0]
-                        intrinsic[1,1] = -intrinsic[1,1]
-                        fxs.append(fx)
-                        intrinsics.append(intrinsic)
+                rgbs_, intrinsics, fxs = [], [], []
+                for idx in used_camera_idxs:
+                    sensor = sensors[idx]
+                    fx, _ = sensor.get_focal_length()
+                    intrinsic = sensor.get_intrinsic_matrix()
+                    fx = -fx
+                    intrinsic[0,0] = -intrinsic[0,0]
+                    intrinsic[1,1] = -intrinsic[1,1]
+                    rgbs_.append(rgbs[idx])
+                    fxs.append(fx)
+                    intrinsics.append(intrinsic)
+                
                 dpreds = depth_predict_function(
                     depth_model=depth_model,
                     depth_model_transform=depth_model_transform,
-                    rgb_imgs=np.array([rgb for rgb in rgbs if rgb is not None])[None],
+                    rgb_imgs=np.array(rgbs_)[None],
                     f_px=np.array(fxs)[None],
                     intrinsics=np.array(intrinsics)[None]
                 )
                 dpreds = dpreds[0] # (B, V, H, W) -> (V, H, W)
-                for i, get_depth in enumerate(get_pcds):
-                    depth = None
-                    if get_depth:
-                        depth = dpreds[0] 
+                for i in range(len(depths)):
+                    if i in used_camera_idxs:
+                        depths[i] = dpreds[0]
                         dpreds = dpreds[1:] 
-                        
-                        rgb_view    = rgbs[i]  # (C, H, W) -> (H, W, C)
-                        # dpred       = depth
+                    else:
+                        print(f"Used GT depth from sensor {i}")
 
-                        if i == 3:
-                            print(f"Used wrist sensor for depth prediction")
-                            depth = sensors[i].capture_depth(0)
+                        near = sensor.get_near_clipping_plane()
+                        far  = sensor.get_far_clipping_plane()
+                        depths[i] = near + depths[i] * (far - near)
 
-                            if depth is not None and depth_noises[i] is not None:
-                                depth = depth_noises[i].apply(depth)
-                            near = sensor.get_near_clipping_plane()
-                            far  = sensor.get_far_clipping_plane()
-                            depth = near + depth * (far - near)
+                    rgb_view    = rgbs[i]  # (C, H, W) -> (H, W, C)
+                    depth = depths[i]  # (H, W)
+                    plt.figure(figsize=(10, 5))
 
-                        # plt.figure(figsize=(10, 5))
+                    # RGB View
+                    plt.subplot(1, 2, 1)
+                    plt.imshow(rgb_view)
+                    plt.title("RGB View")
+                    plt.axis("off")
 
-                        # # RGB View
-                        # plt.subplot(1, 2, 1)
-                        # plt.imshow(rgb_view)
-                        # plt.title("RGB View")
-                        # plt.axis("off")
-
-                        # plt.subplot(1, 2, 2)
-                        # plt.imshow(depth, cmap='viridis')
-                        # plt.title("Predicted Depth")
-                        # plt.colorbar()
-                        # plt.axis("off")
-                        # plt.tight_layout
-                        # plt.savefig(f'/home/yehhh/RL_2025_Spring_Final/3d_diffuser_actor/eval_logs/vis_{i}.png')
-                        # plt.close()
-                    depths.append(depth)
-            else:
-                for i, (sensor, rgb, do_depth, depth_noise, depth_in_meter) in enumerate(
-                    zip(sensors, rgbs, get_pcds, depth_noises, depth_in_meters)
-                ):
-                    depth = None
-                    if sensor is not None and do_depth:
-                        # ensure sensor state updated
-                        if not get_rgbs[i]:
-                            sensor.handle_explicitly()
-
-                        depth = sensor.capture_depth(depth_in_meter)
-
-                        if depth is not None and depth_noise is not None:
-                            depth = depth_noise.apply(depth)
-
-                    depths.append(depth)
-
+                    plt.subplot(1, 2, 2)
+                    plt.imshow(depth, cmap='viridis')
+                    plt.title("Predicted Depth")
+                    plt.colorbar()
+                    plt.axis("off")
+                    plt.tight_layout
+                    plt.savefig(f'./eval_logs/vis_{i}.png')
+                    plt.close()
             # ── Phase 3: compute point‑clouds ─────────────────────────────
             pcds = []
             for i, (sensor, depth, do_pcd, depth_in_meter) in enumerate(
@@ -380,13 +375,22 @@ class Scene(object):
                     # convert to meters if needed
                     depth_m = depth
                     if not depth_in_meter and not use_mono_depth:
+                        print("transform depth to meters")
                         near = sensor.get_near_clipping_plane()
                         far  = sensor.get_far_clipping_plane()
                         depth_m = near + depth * (far - near)
                     pcd = sensor.pointcloud_from_depth(depth_m)
                 pcds.append(pcd)
+            for i, get_depth in enumerate(get_depths):
+                if not get_depth:
+                    depths[i] = None
+
+                ## TRUN DEPTH FROM METERS INTO SCALE
+                near = sensors[i].get_near_clipping_plane()
+                far  = sensors[i].get_far_clipping_plane()
+                depths[i] = (depths[i] - near) / (far - near)
+            print(f"transform depth from meters into scale")
             
-            depths = [None] * N
             return rgbs, depths, pcds
             
         def get_mask(sensor: VisionSensor, mask_fn):
@@ -412,7 +416,6 @@ class Scene(object):
         #     self._cam_front, fc_ob.rgb, fc_ob.depth, fc_ob.point_cloud,
         #     fc_ob.rgb_noise, fc_ob.depth_noise, fc_ob.depth_in_meters)
         
-
         ## YCH: get rgbs depths pcds at once with finetuned depth model
         rgbs, depths, pcds = get_rgbs_depths(
             sensors=[self._cam_over_shoulder_left, self._cam_over_shoulder_right, self._cam_overhead, self._cam_wrist, self._cam_front],
@@ -567,7 +570,12 @@ class Scene(object):
 
     def get_demo(self, record: bool = True,
                  callable_each_step: Callable[[Observation], None] = None,
-                 randomly_place: bool = True) -> Demo:
+                 randomly_place: bool = True,
+                use_mono_depth=False,
+                depth_model=None,
+                depth_model_transform=None,
+                depth_predict_function=None
+                ) -> Demo:
         """Returns a demo (list of observations)"""
 
         if not self._has_init_task:
@@ -581,11 +589,10 @@ class Scene(object):
         if len(waypoints) == 0:
             raise NoWaypointsError(
                 'No waypoints were found.', self.task)
-
         demo = []
         if record:
             self.pyrep.step()  # Need this here or get_force doesn't work...
-            demo.append(self.get_observation())
+            demo.append(self.get_observation(use_mono_depth=use_mono_depth, depth_model=depth_model, depth_model_transform=depth_model_transform, depth_predict_function=depth_predict_function))
         while True:
             success = False
             self._ignore_collisions_for_current_waypoint = False
@@ -616,13 +623,17 @@ class Scene(object):
                 while not done:
                     done = path.step()
                     self.step()
-                    self._demo_record_step(demo, record, callable_each_step)
+                    self._demo_record_step(demo, record, callable_each_step, 
+                                            use_mono_depth=use_mono_depth, 
+                                            depth_model=depth_model, 
+                                            depth_model_transform=depth_model_transform, 
+                                            depth_predict_function=depth_predict_function)
                     success, term = self.task.success()
 
                 point.end_of_path()
 
                 path.clear_visualization()
-
+                print(f"scene.py 629")
                 if len(ext) > 0:
                     contains_param = False
                     start_of_bracket = -1
@@ -638,6 +649,7 @@ class Scene(object):
                                 self.pyrep.step()
                                 self.task.step()
                                 if self._obs_config.record_gripper_closing:
+                                    print(f"get obs at scene.py 645")
                                     self._demo_record_step(
                                         demo, record, callable_each_step)
                     elif 'close_gripper(' in ext:
@@ -650,6 +662,7 @@ class Scene(object):
                                 self.pyrep.step()
                                 self.task.step()
                                 if self._obs_config.record_gripper_closing:
+                                    print(f"get obs at scene.py 658")
                                     self._demo_record_step(
                                         demo, record, callable_each_step)
 
@@ -662,6 +675,7 @@ class Scene(object):
                             self.pyrep.step()
                             self.task.step()
                             if self._obs_config.record_gripper_closing:
+                                print(f"get obs at scene.py 671")
                                 self._demo_record_step(
                                     demo, record, callable_each_step)
 
@@ -669,7 +683,11 @@ class Scene(object):
                         for g_obj in self.task.get_graspable_objects():
                             gripper.grasp(g_obj)
 
-                    self._demo_record_step(demo, record, callable_each_step)
+                    self._demo_record_step(demo, record, callable_each_step, 
+                                           use_mono_depth=use_mono_depth, 
+                                            depth_model=depth_model, 
+                                            depth_model_transform=depth_model_transform, 
+                                            depth_predict_function=depth_predict_function)
 
             if not self.task.should_repeat_waypoints() or success:
                 break
@@ -680,7 +698,11 @@ class Scene(object):
             for _ in range(10):
                 self.pyrep.step()
                 self.task.step()
-                self._demo_record_step(demo, record, callable_each_step)
+                self._demo_record_step(demo, record, callable_each_step, 
+                                       use_mono_depth=use_mono_depth, 
+                                            depth_model=depth_model, 
+                                            depth_model_transform=depth_model_transform, 
+                                            depth_predict_function=depth_predict_function)
                 success, term = self.task.success()
                 if success:
                     break
@@ -700,10 +722,20 @@ class Scene(object):
                 self._workspace_maxy > y > self._workspace_miny and
                 self._workspace_maxz > z > self._workspace_minz)
 
-    def _demo_record_step(self, demo_list, record, func):
+    def _demo_record_step(self, demo_list, record, func,
+                            use_mono_depth=False,
+                            depth_model=None,
+                            depth_model_transform=None,
+                            depth_predict_function=None
+                            ):
         if record:
-            demo_list.append(self.get_observation())
+            demo_list.append(self.get_observation(
+                                use_mono_depth=use_mono_depth, 
+                                depth_model=depth_model, 
+                                depth_model_transform=depth_model_transform, 
+                                depth_predict_function=depth_predict_function))
         if func is not None:
+            print(f"get obs at scene.py 712")
             func(self.get_observation())
 
     def _set_camera_properties(self) -> None:

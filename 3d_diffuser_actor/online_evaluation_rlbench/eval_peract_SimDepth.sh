@@ -1,8 +1,9 @@
 exp=3d_diffuser_actor
 
 tasks=(
-    # open_drawer
-    open_drawer slide_block_to_color_target sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
+    open_drawer
+    # slide_block_to_color_target open_drawer sweep_to_dustpan_of_size meat_off_grill
+    # open_drawer slide_block_to_color_target sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
 )
 data_dir=/project2/yehhh/datasets/RLBench/raw/test
 num_episodes=100
@@ -17,7 +18,7 @@ cameras="left_shoulder,right_shoulder,wrist,front"
 fps_subsampling_factor=5
 lang_enhanced=0
 relative_action=0
-seed=4
+seed=5
 checkpoint=train_logs/diffuser_actor_peract.pth
 quaternion_format=wxyz  # IMPORTANT: change this to be the same as the training script IF you're not using our checkpoint
 export CUDA_VISIBLE_DEVICES=0

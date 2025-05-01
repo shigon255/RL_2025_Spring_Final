@@ -4,6 +4,8 @@ import glob
 import logging
 import os
 import pickle
+import shutil
+import subprocess
 from subprocess import call
 
 from utils.depth_utils import depth_init_functions, depth_predict_functions
@@ -459,6 +461,12 @@ def run_all_variations(i, lock, task_index, variation_count, results, file_lock,
             )
             episode_path = os.path.join(episodes_path, EPISODE_FOLDER % ex_idx)
 
+            for i in range(5):
+                folder_path = f"eval_logs/vis/{i}/"
+                if os.path.exists(folder_path):
+                    shutil.rmtree(folder_path)  # Clear the folder
+                os.makedirs(folder_path)  # Create the folder
+
             while attempts > 0:
                 try:
                     #variation = np.random.randint(possible_variations)
@@ -522,6 +530,23 @@ def run_all_variations(i, lock, task_index, variation_count, results, file_lock,
             if abort_variation:
                 break
 
+            used_camera_id = [0, 1, 2, 3, 4]
+            for i in used_camera_id:
+                frame_folder = f'./eval_logs/vis/{i}/'
+                input_pattern = os.path.join(frame_folder, 'vis_%03d.png')
+
+                cmd = [
+                    'ffmpeg',
+                    '-y',                   # overwrite output if it exists
+                    '-framerate', '15',
+                    '-i', input_pattern,    # input files
+                    '-c:v', 'libx264',      # H.264 encoding
+                    '-pix_fmt', 'yuv420p',  # ensures widest compatibility
+                    f'eval_logs/vis/vis_{i}.mp4'
+                ]
+
+                subprocess.run(cmd, check=True)
+                
         # with lock:
         task_index.value += 1
 

@@ -298,7 +298,6 @@ class Scene(object):
 
             # ── Phase 2: capture / predict depths ─────────────────────────
             depths = []
-            
             for i, (sensor, rgb, do_depth, depth_noise, depth_in_meter) in enumerate(
                 zip(sensors, rgbs, get_pcds, depth_noises, depth_in_meters)
             ):
@@ -336,35 +335,55 @@ class Scene(object):
                     intrinsics=np.array(intrinsics)[None]
                 )
                 dpreds = dpreds[0] # (B, V, H, W) -> (V, H, W)
+
+
+                
+
                 for i in range(len(depths)):
                     if i in used_camera_idxs:
                         depths[i] = dpreds[0]
                         dpreds = dpreds[1:] 
-                    else:
+                    elif depths[i] is not None:
                         print(f"Used GT depth from sensor {i}")
 
-                        near = sensor.get_near_clipping_plane()
-                        far  = sensor.get_far_clipping_plane()
+                        near = sensors[i].get_near_clipping_plane()
+                        far  = sensors[i].get_far_clipping_plane()
                         depths[i] = near + depths[i] * (far - near)
 
-                    rgb_view    = rgbs[i]  # (C, H, W) -> (H, W, C)
-                    depth = depths[i]  # (H, W)
-                    plt.figure(figsize=(10, 5))
+                    
+            frame_folder = './eval_logs/vis/0'
+            pattern = re.compile(r'^vis_(\d+)\.png$')
 
-                    # RGB View
-                    plt.subplot(1, 2, 1)
-                    plt.imshow(rgb_view)
-                    plt.title("RGB View")
-                    plt.axis("off")
+            ids = []
+            for fn in os.listdir(frame_folder):
+                m = pattern.match(fn)
+                if m:
+                    ids.append(int(m.group(1)))
 
-                    plt.subplot(1, 2, 2)
-                    plt.imshow(depth, cmap='viridis')
-                    plt.title("Predicted Depth")
-                    plt.colorbar()
-                    plt.axis("off")
-                    plt.tight_layout
-                    plt.savefig(f'./eval_logs/vis_{i}.png')
-                    plt.close()
+            last_id = max(ids) if ids else 0
+            next_id = last_id + 1
+            for i in range(len(depths)):
+                if depths[i] is None:
+                    continue
+                rgb_view    = rgbs[i]  # (C, H, W) -> (H, W, C)
+                depth = depths[i]  # (H, W)
+                plt.figure(figsize=(10, 5))
+
+                # RGB View
+                plt.subplot(1, 2, 1)
+                plt.imshow(rgb_view)
+                plt.title("RGB View")
+                plt.axis("off")
+
+                plt.subplot(1, 2, 2)
+                plt.imshow(depth, cmap='viridis')
+                plt.title("Predicted Depth")
+                plt.colorbar()
+                plt.axis("off")
+                plt.tight_layout()
+                plt.savefig(f'./eval_logs/vis/{i}/vis_{next_id:03d}.png')
+                plt.close()
+            
             # ── Phase 3: compute point‑clouds ─────────────────────────────
             pcds = []
             for i, (sensor, depth, do_pcd, depth_in_meter) in enumerate(
@@ -375,7 +394,7 @@ class Scene(object):
                     # convert to meters if needed
                     depth_m = depth
                     if not depth_in_meter and not use_mono_depth:
-                        print("transform depth to meters")
+                        print("calculating depth in meters")
                         near = sensor.get_near_clipping_plane()
                         far  = sensor.get_far_clipping_plane()
                         depth_m = near + depth * (far - near)
@@ -385,11 +404,12 @@ class Scene(object):
                 if not get_depth:
                     depths[i] = None
 
-                ## TRUN DEPTH FROM METERS INTO SCALE
-                near = sensors[i].get_near_clipping_plane()
-                far  = sensors[i].get_far_clipping_plane()
-                depths[i] = (depths[i] - near) / (far - near)
-            print(f"transform depth from meters into scale")
+                elif use_mono_depth:
+                    ## TRUN DEPTH FROM METERS INTO SCALE
+                    near = sensors[i].get_near_clipping_plane()
+                    far  = sensors[i].get_far_clipping_plane()
+                    depths[i] = (depths[i] - near) / (far - near)
+                    print(f"transform depth from meters into scale")
             
             return rgbs, depths, pcds
             
@@ -431,7 +451,6 @@ class Scene(object):
         overhead_rgb, overhead_depth, overhead_pcd = rgbs[2], depths[2], pcds[2]
         wrist_rgb, wrist_depth, wrist_pcd = rgbs[3], depths[3], pcds[3]
         front_rgb, front_depth, front_pcd = rgbs[4], depths[4], pcds[4]
-
         # ## YCH: collecting sim depth data
         # def get_next_frame_idx(directory):
         #     files = os.listdir(directory)

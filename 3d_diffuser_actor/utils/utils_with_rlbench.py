@@ -1,6 +1,8 @@
 import os
 import glob
 import random
+import shutil 
+import subprocess
 from typing import List, Dict, Any
 from pathlib import Path
 import json
@@ -518,6 +520,13 @@ class RLBenchEnv:
         total_reward = 0
 
         for demo_id in range(num_demos):
+           
+            for i in range(5):
+                folder_path = f"eval_logs/vis/{i}/"
+                if os.path.exists(folder_path):
+                    shutil.rmtree(folder_path)  # Clear the folder
+                os.makedirs(folder_path)  # Create the folder
+
             if verbose:
                 print()
                 print(f"Starting demo {demo_id}")
@@ -635,6 +644,24 @@ class RLBenchEnv:
                     print(task_str, demo, step_id, success_rate, e)
                     reward = 0
                     #break
+
+            # YCH: render videos
+            used_camera_id = [0, 1, 4]
+            for i in used_camera_id:
+                frame_folder = f'./eval_logs/vis/{i}/'
+                input_pattern = os.path.join(frame_folder, 'vis_%03d.png')
+
+                cmd = [
+                    'ffmpeg',
+                    '-y',                   # overwrite output if it exists
+                    '-framerate', '15',
+                    '-i', input_pattern,    # input files
+                    '-c:v', 'libx264',      # H.264 encoding
+                    '-pix_fmt', 'yuv420p',  # ensures widest compatibility
+                    f'eval_logs/vis/vis_{i}.mp4'
+                ]
+
+                subprocess.run(cmd, check=True)
 
             total_reward += max_reward
             if reward == 0:

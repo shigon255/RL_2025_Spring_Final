@@ -1,9 +1,12 @@
-exp=3d_diffuser_actor_gnfactor
+depth_model=unidepthfullfinetune
+exp=3d_diffuser_actor_gnfactor_${depth_model}
 
 tasks=(
-    close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap
+    slide_block_to_color_target open_drawer sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
+    # slide_block_to_color_target open_drawer sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer
+    # close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap
 )
-data_dir=./data/peract/raw/test/
+data_dir=/project2/yehhh/datasets/RLBench/raw/test
 num_episodes=100
 gripper_loc_bounds_file=tasks/18_peract_tasks_location_bounds.json
 use_instruction=1
@@ -16,13 +19,17 @@ cameras="front"
 fps_subsampling_factor=5
 lang_enhanced=0
 relative_action=0
-seed=0
+seed=2
 checkpoint=train_logs/diffuser_actor_gnfactor.pth
 quaternion_format=wxyz  # IMPORTANT: change this to be the same as the training script IF you're not using our checkpoint
+export CUDA_VISIBLE_DEVICES=3
+export PYTHONPATH=$PYTHONPATH:/data1/yehhh_/RL_2025_Spring_Final/UniDepth
+
 
 num_ckpts=${#tasks[@]}
 for ((i=0; i<$num_ckpts; i++)); do
-    CUDA_LAUNCH_BLOCKING=1 python online_evaluation_rlbench/evaluate_policy.py \
+    # CUDA_LAUNCH_BLOCKING=1 
+    python online_evaluation_rlbench/evaluate_policy.py \
     --tasks ${tasks[$i]} \
     --checkpoint $checkpoint \
     --diffusion_timesteps 100 \
@@ -52,6 +59,8 @@ for ((i=0; i<$num_ckpts; i++)); do
     --gripper_loc_bounds_buffer 0.08 \
     --quaternion_format $quaternion_format \
     --interpolation_length $interpolation_length \
-    --dense_interpolation 1
+    --dense_interpolation 1 \
+    --use_mono_depth 1 \
+    --mono_depth_model_name $depth_model 
 done
 

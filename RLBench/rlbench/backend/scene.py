@@ -1,4 +1,5 @@
 from typing import List, Callable, Optional
+import cv2
 from collections import namedtuple
 import numpy as np
 import torch
@@ -283,7 +284,9 @@ class Scene(object):
             N = len(sensors)
             assert N == len(get_rgbs) == len(get_depths) == len(get_pcds) \
                     == len(rgb_noises) == len(depth_noises) == len(depth_in_meters)
-            used_camera_idxs = [0, 1, 4]
+            # used_camera_idxs = [4]
+            # used_camera_idxs = [0, 1, 4]
+            used_camera_idxs = [0, 1, 3, 4]
             # Phase 1: capture & denoise all RGBs
             rgbs = []
             for sensor, do_rgb, rgb_noise in zip(sensors, get_rgbs, rgb_noises):
@@ -330,14 +333,10 @@ class Scene(object):
                 dpreds = depth_predict_function(
                     depth_model=depth_model,
                     depth_model_transform=depth_model_transform,
-                    rgb_imgs=np.array(rgbs_)[None],
-                    f_px=np.array(fxs)[None],
-                    intrinsics=np.array(intrinsics)[None]
+                    rgb_imgs=np.array(rgbs_),
+                    f_px=np.array(fxs),
+                    intrinsics=np.array(intrinsics)
                 )
-                dpreds = dpreds[0] # (B, V, H, W) -> (V, H, W)
-
-
-                
 
                 for i in range(len(depths)):
                     if i in used_camera_idxs:
@@ -351,7 +350,7 @@ class Scene(object):
                         depths[i] = near + depths[i] * (far - near)
 
                     
-            frame_folder = './eval_logs/vis/0'
+            frame_folder = './eval_logs/vis/4'
             pattern = re.compile(r'^vis_(\d+)\.png$')
 
             ids = []
@@ -367,22 +366,23 @@ class Scene(object):
                     continue
                 rgb_view    = rgbs[i]  # (C, H, W) -> (H, W, C)
                 depth = depths[i]  # (H, W)
-                plt.figure(figsize=(10, 5))
+                cv2.imwrite(f'./eval_logs/vis/{i}/vis_{next_id:03d}.png', rgb_view[:, :, ::-1])
+                # plt.figure(figsize=(10, 5))
 
-                # RGB View
-                plt.subplot(1, 2, 1)
-                plt.imshow(rgb_view)
-                plt.title("RGB View")
-                plt.axis("off")
+                # # RGB View
+                # plt.subplot(1, 2, 1)
+                # plt.imshow(rgb_view)
+                # plt.title("RGB View")
+                # plt.axis("off")
 
-                plt.subplot(1, 2, 2)
-                plt.imshow(depth, cmap='viridis')
-                plt.title("Predicted Depth")
-                plt.colorbar()
-                plt.axis("off")
-                plt.tight_layout()
-                plt.savefig(f'./eval_logs/vis/{i}/vis_{next_id:03d}.png')
-                plt.close()
+                # plt.subplot(1, 2, 2)
+                # plt.imshow(depth, cmap='viridis')
+                # plt.title("Predicted Depth")
+                # plt.colorbar()
+                # plt.axis("off")
+                # plt.tight_layout()
+                # plt.savefig(f'./eval_logs/vis/{i}/vis_{next_id:03d}.png')
+                # plt.close()
             
             # ── Phase 3: compute point‑clouds ─────────────────────────────
             pcds = []

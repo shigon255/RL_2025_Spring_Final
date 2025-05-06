@@ -9,7 +9,7 @@ import torch
 import torchvision
 import torchvision.transforms.v2.functional as TF
 from PIL import Image
-
+from matplotlib import pyplot as plt
 from unidepth.datasets.base_dataset import BaseDataset
 from unidepth.utils import is_main_process
 from unidepth.utils.camera import BatchCamera, Pinhole
@@ -78,7 +78,6 @@ class ImageDataset(BaseDataset):
                 results[(0, 0)][key_mapper] = value
                 name = key_mapper.replace("_filename", "")
                 value_root = "/" + value
-
                 if "image" in key_mapper:
                     results[(0, 0)]["filename"] = value
                     file = h5file_chunk.get_node(value_root).read()
@@ -87,6 +86,10 @@ class ImageDataset(BaseDataset):
                         .to(torch.uint8)
                         .squeeze()
                     )
+                    image_np = image.permute(1, 2, 0).numpy()
+                    image_pil = Image.fromarray(image_np)
+                    image_pil.save("rgb.png")
+
                     results[(0, 0)]["image_fields"].add(name)
                     results[(0, 0)][f"image_ori_shape"] = image.shape[-2:]
                     results[(0, 0)][name] = image[None, ...]
@@ -112,6 +115,16 @@ class ImageDataset(BaseDataset):
                     file = h5file_chunk.get_node(value_root).read()
                     depth = Image.open(io.BytesIO(file))
                     depth = TF.pil_to_tensor(depth).squeeze().to(torch.float32)
+
+                    depth_np = depth.numpy() / self.depth_scale
+                    # Plot the depth map
+                    plt.figure(figsize=(8, 6))
+                    plt.imshow(depth_np, cmap='viridis')  # Use a colormap like 'viridis' for better visualization
+                    plt.colorbar(label='Depth Value')    # Add a colorbar to indicate depth values
+                    plt.axis('off')                      # Turn off axis labels
+                    plt.savefig("depth.png", bbox_inches='tight')
+                    plt.close()                
+
                     if depth.ndim == 3:
                         depth = depth[2] + depth[1] * 255 + depth[0] * 255 * 255
 
@@ -178,7 +191,7 @@ class ImageDataset(BaseDataset):
         return sample[idx_sample]
 
     def get_extrinsics(self, idx, image_name):
-        idx_sample = self.mapper.get("cam2w", 1000)
+        idx_sample = self.mapper.get("cam2w", 2000)
         sample = self.dataset[idx]
         if idx_sample >= len(sample):
             return torch.eye(4)

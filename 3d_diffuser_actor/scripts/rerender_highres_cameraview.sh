@@ -13,7 +13,7 @@ export PYTHONPATH=$(pwd):$PYTHONPATH
 # Re-render high-resolution camera views
 # for task in place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap
 # for task in open_drawer sweep_to_dustpan_of_size meat_off_grill put_item_in_drawer slide_block_to_color_target
-for task in open_drawer 
+for task in meat_off_grill 
 do
     python data_preprocessing/rerender_highres_rlbench.py \
         --tasks=$task \
@@ -23,7 +23,7 @@ do
         --renderer=opengl \
         --processes=1 \
         --all_variations=True \
-        --use_mono_depth 0 \
+        --use_mono_depth 1 \
         --mono_depth_model_name $depth_model 
 
 done

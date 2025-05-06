@@ -4,19 +4,19 @@
         "deterministic": true
     },
     "training": {    
-    "n_iters": 300000,
-    "batch_size": 8,
-    "validation_interval": 2,
-    "nsteps_accumulation_gradient": 2,
+    "n_iters": 500,
+    "batch_size": 6,
+    "validation_interval": 10,
+    "nsteps_accumulation_gradient": 1,
     "use_checkpoint": false,
-    "lr": 1e-4,
+    "lr": 1e-5,
     "lr_final": 1e-6,
     "lr_warmup": 1.0,
     "cycle_beta": false,
 
     "wd": 0.1,
     "wd_final": 0.1,
-    "warmup_iters": 75000,
+    "warmup_iters": 0,
     "ld": 1.0,
 
     "drop_path": 0.0,
@@ -65,7 +65,7 @@
         }
     }},
     "data": {
-        "image_shape": [480, 640],
+        "image_shape": [256, 256],
         "normalization": "imagenet",
         "num_copies": 2,
         "num_frames": 1,
@@ -74,11 +74,10 @@
             "ETH3D": 1.0
         },
         "train_datasets": [
-            "ETH3D",
-            "Waymo"
+            "RLBench"
         ],
         "val_datasets": [
-            "IBims"
+            "RLBench"
         ],
         "data_root": "datasets",
         "crop": "garg",

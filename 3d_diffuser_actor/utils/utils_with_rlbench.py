@@ -646,7 +646,8 @@ class RLBenchEnv:
                     #break
 
             # YCH: render videos
-            used_camera_id = [0, 1, 4]
+            used_camera_id = [0, 1, 3, 4]
+            # used_camera_id = [4]
             for i in used_camera_id:
                 frame_folder = f'./eval_logs/vis/{i}/'
                 input_pattern = os.path.join(frame_folder, 'vis_%03d.png')
@@ -654,7 +655,7 @@ class RLBenchEnv:
                 cmd = [
                     'ffmpeg',
                     '-y',                   # overwrite output if it exists
-                    '-framerate', '15',
+                    '-framerate', '5',
                     '-i', input_pattern,    # input files
                     '-c:v', 'libx264',      # H.264 encoding
                     '-pix_fmt', 'yuv420p',  # ensures widest compatibility

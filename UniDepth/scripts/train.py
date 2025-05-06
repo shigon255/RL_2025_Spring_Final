@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import random
+import matplotlib.pyplot as plt
 import uuid
 from contextlib import nullcontext
 from datetime import datetime as dt
@@ -36,7 +37,7 @@ from unidepth.utils.distributed import (barrier, create_local_process_group,
 from unidepth.utils.ema_torch import (DummyExponentialMovingAverage,
                                       ExponentialMovingAverage)
 from unidepth.utils.misc import calculate_mean_values, format_seconds
-from unidepth.utils.validation import validate
+from unidepth.utils.validation import validate, original_image
 
 EMA_INTERVAL = 10
 
@@ -51,7 +52,7 @@ def aggregate_sync_losses(dict_: dict[str, torch.Tensor], device):
 
 
 def main_worker(config: Dict[str, Any], args: argparse.Namespace):
-
+    wandb.login(key="ca1d3a5c0c4ec47003eee2ed5c888b62b3fb3201")
     current_process = psutil.Process(os.getpid())
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     seed = config["generic"]["seed"]
@@ -141,24 +142,38 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
     f16 = config["training"].get("f16", False)
     clipping = config["training"].get("clipping", None)
 
-    # Optimize
     ddp_model = model.module if args.distributed else model
-    params = ddp_model.get_params(config)
-    optimizer = optim.AdamW(params)
 
     # Load Model:
     step = 0
-    if config["training"].get("pretrained", None) is not None:
-        ddp_model.load_pretrained(config["training"]["pretrained"])
-        pretrained = torch.load(
-            config["training"]["pretrained"], map_location="cpu", weights_only=False
-        )
-        try:
-            optimizer.load_state_dict(pretrained["optimizer"])
-        except Exception as e:
-            if is_main_process():
-                print("Could not load optimizer state dict:", e)
-        step = pretrained.get("step", step)
+    # if config["training"].get("pretrained", None) is not None:
+        # repo_dir = os.path.dirname(os.path.realpath(__file__))
+        # with open(os.path.join(repo_dir, "configs", f"config_{version}_{backbone}.json")) as f:
+        #     config = json.load(f)
+        
+        # model = MAP_VERSIONS[version](config)
+        # if pretrained:
+    import huggingface_hub
+    path = huggingface_hub.hf_hub_download(repo_id=f"lpiccinelli/unidepth-v2-vitl14", filename=f"pytorch_model.bin", repo_type="model")
+    info = ddp_model.load_state_dict(torch.load(path), strict=False)
+    print(f"UniDepth_v2_vitl14 is loaded with:")
+    print(f"\t missing keys: {info.missing_keys}")
+    print(f"\t additional keys: {info.unexpected_keys}")
+
+        # ddp_model.load_pretrained(config["training"]["pretrained"])
+        # pretrained = torch.load(
+        #     config["training"]["pretrained"], map_location="cpu", weights_only=False
+        # )
+        # try:
+        #     optimizer.load_state_dict(pretrained["optimizer"])
+        # except Exception as e:
+        #     if is_main_process():
+        #         print("Could not load optimizer state dict:", e)
+        # step = pretrained.get("step", step)
+
+    # Optimize
+    params = ddp_model.get_params(config)
+    optimizer = optim.AdamW(params)
 
     # EMA
     ema_class = (
@@ -185,9 +200,10 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
     batch_size = config["training"]["batch_size"] // config["data"]["num_copies"]
 
     is_shell = int(os.environ.get("SHELL_JOB", 0))
-    run_id = sync_string_across_gpus(
-        [f"{dt.now().strftime('%d-%h_%H-%M')}-{uuid.uuid4()}"], device
-    )[0]
+    # run_id = sync_string_across_gpus(
+    #     [f"{dt.now().strftime('%d-%h_%H-%M')}-{uuid.uuid4()}"], device
+    # )[0]
+    run_id = f"{dt.now().strftime('%d-%h_%H-%M')}"
 
     if not is_shell and is_main_process():
         repo_folder = os.path.dirname(os.path.realpath(__file__))
@@ -281,8 +297,8 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
             resize_method=resize_method,
             num_frames=1,
             mini=1.0,
+            num_data=199
         )
-
     # Dataset samplers, create distributed sampler pinned to rank
     if args.distributed:
         weights, num_samples = get_weights(train_datasets, config["data"]["sampling"])
@@ -308,7 +324,7 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
     )
 
     # DATASET LOADERS
-    val_batch_size = 1
+    val_batch_size = 50
     num_workers = 0  # int(os.environ.get("SLURM_CPUS_PER_TASK", 4))
     train_loader = DataLoader(
         train_dataset,
@@ -399,8 +415,71 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
     gpu_mem = (torch.cuda.mem_get_info()[1] - torch.cuda.mem_get_info()[0]) / 2**30
 
     while True:
-        for j, batches in enumerate(train_loader):
+        ddp_model.eval()
+        os.makedirs(f'./vis/{step}', exist_ok=True)
+        with torch.no_grad(), ema_handle.average_parameters():
+            for i, batch in enumerate(val_loaders["RLBench"]):
+                with context:
+                    batch["data"] = {
+                        k: v.to(model.device) for k, v in batch["data"].items()
+                    }
+                    # remove temporal dimension of the dataloder, here is always 1!
+                    batch["data"] = {k: v.squeeze(1) for k, v in batch["data"].items()}
+                    batch["img_metas"] = [
+                        {k: v[0] for k, v in meta.items() if isinstance(v, list)}
+                        for meta in batch["img_metas"]
+                    ]
 
+                    preds = ddp_model(batch["data"], batch["img_metas"])
+
+                batch, _ = original_image(batch, preds=None)
+                for idx in range(4):
+
+                    rgb = batch["data"]["image_original"][idx]
+
+                    mean = torch.tensor([0.485, 0.456, 0.406], device=rgb.device).view(-1,1,1)
+                    std  = torch.tensor([0.229, 0.224, 0.225], device=rgb.device).view(-1,1,1)
+
+                    # 2) Unnormalize
+                    rgb = rgb * std + mean
+
+                    # 3) Clamp to [0,1]
+                    rgb = rgb.clamp(0.0, 1.0)
+
+                    rgb_view = (rgb
+                            .permute(1, 2, 0)        # CHW → HWC
+                            .cpu()
+                            .numpy() * 255.0
+                            ).astype(np.uint8)
+
+                    depth =  batch["data"]["depth"][idx, 0].cpu().numpy()  # (H, W)
+                    depth_pred = preds["depth"][idx, 0].cpu().numpy()  # (H, W)
+                    plt.figure(figsize=(15, 5))
+
+                    # RGB View
+                    plt.subplot(1, 3, 1)
+                    plt.imshow(rgb_view)
+                    plt.title("RGB View")
+                    plt.axis("off")
+
+                    plt.subplot(1, 3, 2)
+                    plt.imshow(depth, cmap='viridis')
+                    plt.title("GT depth")
+                    plt.axis("off")
+                    plt.colorbar()
+
+                    plt.subplot(1, 3, 3)
+                    plt.imshow(depth_pred, cmap='viridis')
+                    plt.title("Predicted Depth")
+                    plt.axis("off")
+                    plt.colorbar()
+                    
+                    plt.tight_layout()
+                    plt.savefig(f'./vis/{step}/vis_{idx:03d}.png')
+                    plt.close()
+                break
+        ddp_model.train()
+        for j, batches in enumerate(train_loader):
             system_memory = (
                 0.99 * system_memory
                 + 0.01 * dict(psutil.virtual_memory()._asdict())["available"] / 2**30
@@ -439,15 +518,21 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
                     for meta in batch["img_metas"]
                 ]
 
-                with (
-                    model.no_sync()
-                    if idx < nsteps_accumulation_gradient - 1
-                    else nullcontext()
-                ):
-                    with context:
-                        preds, losses = model(batch["data"], batch["img_metas"])
-                    loss = sum(losses["opt"].values()) / nsteps_accumulation_gradient
-                    scaler.scale(loss).backward()
+                nullcontext()
+                with context:
+                    preds, losses = model(batch["data"], batch["img_metas"])
+                loss = sum(losses["opt"].values()) / nsteps_accumulation_gradient
+                scaler.scale(loss).backward()
+
+                # with (
+                #     model.no_sync()
+                #     if idx < nsteps_accumulation_gradient - 1
+                #     else nullcontext()
+                # ):
+                #     with context:
+                #         preds, losses = model(batch["data"], batch["img_metas"])
+                #     loss = sum(losses["opt"].values()) / nsteps_accumulation_gradient
+                #     scaler.scale(loss).backward()
 
                 losses_dict = {
                     k: v.detach() for loss in losses.values() for k, v in loss.items()
@@ -478,10 +563,10 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
                 pbar.update(1)
 
             step += 1
-
+            # torch.cuda.empty_cache()
             # LOGGING
-            if step % 50 == 0:
-                track_losses = aggregate_sync_losses(track_losses, device=model.device)
+            if step % 5 == 0:
+                # track_losses = aggregate_sync_losses(track_losses, device=model.device)
                 if is_main_process():
                     try:
                         wandb.log(
@@ -497,7 +582,7 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
                         print("Not logging loss because of:", e)
                         pass
 
-            if step % 100 == 0 and is_main_process():
+            if step % 1 == 0 and is_main_process():
                 log_loss_dict = {f"Train/{k}": v for k, v in track_losses.items()}
                 elapsed = int(time() - start)
                 eta = int(elapsed * (n_steps - step) / max(1, step - init_steps))
@@ -518,9 +603,73 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
                 ddp_model.eval()
                 start_validation = time()
                 with torch.no_grad(), ema_handle.average_parameters():
+                    if step % 50 == 0:
+                        torch.save(ddp_model.state_dict(), os.path.join(wandb.run.dir, f"pytorch_model_{step}.bin")) 
                     validate(
                         model, test_loaders=val_loaders, step=step, context=context
                     )
+                    
+                    os.makedirs(f'./vis/{step}', exist_ok=True)
+                    for _, batch in enumerate(val_loaders["RLBench"]):
+                        with context:
+                            batch["data"] = {
+                                k: v.to(model.device) for k, v in batch["data"].items()
+                            }
+                            # remove temporal dimension of the dataloder, here is always 1!
+                            batch["data"] = {k: v.squeeze(1) for k, v in batch["data"].items()}
+                            batch["img_metas"] = [
+                                {k: v[0] for k, v in meta.items() if isinstance(v, list)}
+                                for meta in batch["img_metas"]
+                            ]
+
+                            preds = ddp_model(batch["data"], batch["img_metas"])
+
+                        batch, _ = original_image(batch, preds=None)
+                        for idx in range(4):
+
+                            rgb = batch["data"]["image_original"][idx]
+
+                            mean = torch.tensor([0.485, 0.456, 0.406], device=rgb.device).view(-1,1,1)
+                            std  = torch.tensor([0.229, 0.224, 0.225], device=rgb.device).view(-1,1,1)
+
+                            # 2) Unnormalize
+                            rgb = rgb * std + mean
+
+                            # 3) Clamp to [0,1]
+                            rgb = rgb.clamp(0.0, 1.0)
+
+                            rgb_view = (rgb
+                                    .permute(1, 2, 0)        # CHW → HWC
+                                    .cpu()
+                                    .numpy() * 255.0
+                                    ).astype(np.uint8)
+
+                            depth =  batch["data"]["depth"][idx, 0].cpu().numpy()  # (H, W)
+                            depth_pred = preds["depth"][idx, 0].cpu().numpy()  # (H, W)
+                            plt.figure(figsize=(15, 5))
+
+                            # RGB View
+                            plt.subplot(1, 3, 1)
+                            plt.imshow(rgb_view)
+                            plt.title("RGB View")
+                            plt.axis("off")
+
+                            plt.subplot(1, 3, 2)
+                            plt.imshow(depth, cmap='viridis')
+                            plt.title("GT depth")
+                            plt.axis("off")
+                            plt.colorbar()
+
+                            plt.subplot(1, 3, 3)
+                            plt.imshow(depth_pred, cmap='viridis')
+                            plt.title("Predicted Depth")
+                            plt.axis("off")
+                            plt.colorbar()
+                            
+                            plt.tight_layout()
+                            plt.savefig(f'./vis/{step}/vis_{idx:03d}.png')
+                            plt.close()
+                        break
 
                 if is_main_process():
                     print(f"Elapsed: {format_seconds(int(time() - start_validation))}")
@@ -531,7 +680,7 @@ def main_worker(config: Dict[str, Any], args: argparse.Namespace):
                 if is_main_process() and track_pbar:
                     pbar.close()
                 wandb.finish(0)
-                dist.destroy_process_group()
+                # dist.destroy_process_group()
                 return 0
 
 

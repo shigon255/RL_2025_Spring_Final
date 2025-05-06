@@ -34,6 +34,7 @@ from .hm3d import HM3D
 from .hoi4d import HOI4D
 from .hypersim import HyperSim
 from .ibims import IBims, IBims_F
+from .rlbench import RLBench
 from .image_dataset import ImageDataset
 from .ken_burns import KenBurns
 from .kitti import KITTI, KITTIBenchmark

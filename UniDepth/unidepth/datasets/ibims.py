@@ -62,11 +62,12 @@ class IBims(ImageDataset):
         h5file.close()
         dataset = []
         for line in txt_string.split("\n"):
+            print(line)
             image_filename, depth_filename = line.strip().split(" ")
             intrinsics_val = torch.tensor(intrinsics[image_filename]).squeeze()[:, :3]
+            print(intrinsics_val)
             sample = [image_filename, depth_filename, intrinsics_val]
             dataset.append(sample)
-
         self.dataset = DatasetFromList(dataset)
         self.log_load_dataset()
 
@@ -117,6 +118,8 @@ class IBims_F(SequenceDataset):
             inplace_fields=inplace_fields,
             **kwargs,
         )
+        import ipdb; ipdb.set_trace()
+        print("IBims-F dataset")
 
     def pre_pipeline(self, results):
         results = super().pre_pipeline(results)
